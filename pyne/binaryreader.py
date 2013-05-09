@@ -19,7 +19,7 @@ class _FortranRecord(object):
 
     """
 
-    def __init__(self, data, numBytes):
+    def __init__(self, data, numBytes, endian = "@"):
         """
         Initialize instance of Record object.
         """
@@ -32,6 +32,9 @@ class _FortranRecord(object):
         self.longSize   = struct.calcsize('q')
         self.floatSize  = struct.calcsize('f')
         self.doubleSize = struct.calcsize('d')
+        
+        # Default endian designator is "native"
+        self.endian = "<"#endian
 
     def get_data(self, n, typeCode, itemSize):
         """
@@ -41,8 +44,7 @@ class _FortranRecord(object):
         """
         if self.pos >= self.numBytes:
             raise BinaryReaderError("Already read all data from record")
-        
-        values = struct.unpack('{0}{1}'.format(n,typeCode), self.data[self.pos:self.pos+itemSize*n])
+        values = struct.unpack(self.endian+'{0}{1}'.format(n,typeCode), self.data[self.pos:self.pos+itemSize*n])
         self.pos += itemSize * n
         return list(values)
 
@@ -80,7 +82,7 @@ class _FortranRecord(object):
             raise BinaryReaderError("Already read all data from record")
         
         relevantData = self.data[self.pos:self.pos+length*n]
-        (s,) = struct.unpack('{0}s'.format(length*n), relevantData)
+        (s,) = struct.unpack(self.endian+'{0}s'.format(length*n), relevantData)
         self.pos += length*n
         return [s[i*length:(i+1)*length] for i in range(n)]
 
@@ -145,16 +147,19 @@ class _BinaryReader(object):
     2001.
     """
     
-    def __init__(self,filename,mode='rb'):
+    def __init__(self,filename,mode='rb',endian="@"):
         self.intSize = struct.calcsize('i')
         self.longSize   = struct.calcsize('q')
         self.f = open(filename, mode)
+        # the client may need to specify the endianness to be able 
+        # to read binaries from other machines
+        self.endian = endian 
         
     def close(self):
         self.f.close()
 
     def get_int(self):
-        (i,) = struct.unpack('i',self.f.read(self.intSize))
+        (i,) = struct.unpack(self.endian+'i',self.f.read(self.intSize))
         return i
 
     def put_int(self,data):
@@ -185,7 +190,7 @@ class _BinaryReader(object):
         if numBytes2 != numBytes:
             raise InvalidFortranRecordError("Starting and matching integers in Fortran formatted record do not match.")
         
-        return _FortranRecord(data, numBytes)
+        return _FortranRecord(data, numBytes, self.endian)
 
 
 class BinaryReaderError(Exception):
@@ -203,3 +208,4 @@ class InvalidFortranRecordError(BinaryReaderError):
 
 class FortranRecordError(BinaryReaderError):
     pass
+
